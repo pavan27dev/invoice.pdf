@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Sharing via WhatsApp</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js"></script>
+</head>
+
+<body>
+    <h1>Invoice Generator</h1>
+    <p id="invoiceDate">2025-01-07</p>
+    <p id="invoiceNumber">INV-12345</p>
+    <input type="text" id="customerName" placeholder="Customer Name" value="John Doe">
+    <input type="text" id="customerMobile" placeholder="Customer Mobile" value="9876543210">
+    <input type="text" id="customerEmail" placeholder="Customer Email" value="john.doe@example.com">
+    <textarea id="customerAddress" placeholder="Customer Address">123 Main Street, City, Country</textarea>
+
+    <table id="itemList">
+        <tr>
+            <td>1</td>
+            <td>Product A</td>
+            <td>Description A</td>
+            <td>2</td>
+            <td>100</td>
+            <td>200</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>Product B</td>
+            <td>Description B</td>
+            <td>1</td>
+            <td>300</td>
+            <td>300</td>
+        </tr>
+    </table>
+    <button onclick="shareViaWhatsApp()">Share Invoice</button>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const storage = firebase.storage();
+
+        async function shareViaWhatsApp() {
+            const { jsPDF } = window.jspdf;
+
+            // Generate PDF
+            const doc = new jsPDF();
+            doc.text("Invoice", 10, 10);
+            doc.text("Date: " + document.getElementById("invoiceDate").textContent, 10, 20);
+            doc.text("Invoice Number: " + document.getElementById("invoiceNumber").textContent, 10, 30);
+            doc.text("Customer Details:", 10, 40);
+            doc.text("Name: " + document.getElementById("customerName").value, 10, 50);
+            doc.text("Mobile: " + document.getElementById("customerMobile").value, 10, 60);
+            doc.text("Email: " + document.getElementById("customerEmail").value, 10, 70);
+            doc.text("Address: " + document.getElementById("customerAddress").value, 10, 80);
+
+            let startY = 90;
+            const items = document.querySelectorAll("#itemList tr");
+            items.forEach((item, index) => {
+                const cells = item.querySelectorAll("td");
+                const text = `${cells[0].textContent}. ${cells[1].textContent} - Qty: ${cells[3].textContent}, Price: ${cells[4].textContent}, Amount: ${cells[5].textContent}`;
+                doc.text(text, 10, startY + index * 10);
+            });
+
+            // Save the PDF as a Blob
+            const pdfBlob = doc.output("blob");
+
+            // Upload the PDF to Firebase Storage
+            const storageRef = storage.ref();
+            const pdfRef = storageRef.child(`invoices/invoice_${Date.now()}.pdf`);
+            const uploadTask = pdfRef.put(pdfBlob);
+
+            uploadTask.on(
+                "state_changed",
+                (snapshot) => {
+                    console.log("Uploading:", (snapshot.bytesTransferred / snapshot.totalBytes) * 100, "% done");
+                },
+                (error) => {
+                    console.error("Upload failed:", error);
+                },
+                async () => {
+                    // Get the download URL once the upload is complete
+                    const downloadURL = await pdfRef.getDownloadURL();
+
+                    // WhatsApp share link
+                    const message = encodeURIComponent("Check out this invoice!");
+                    const whatsappLink = `https://wa.me/?text=${message}%0A${downloadURL}`;
+
+                    // Open the WhatsApp share link
+                    window.open(whatsappLink, "_blank");
+                }
+            );
+        }
+    </script>
+</body>
+
+</html>
